@@ -126,6 +126,76 @@ function requestGeolocation() {
     }
 }
 
+function renderMainWeather(data) {
+    if (!data || !data.forecast) return;
+    
+    const forecast = data.forecast.forecastday;
+    const current = data.current;
+    const location = data.location;
+
+    // Дни (сегодня + 2)
+    let daysHtml = '<div class="days-grid">';
+    forecast.forEach((day, index) => {
+        const date = new Date(day.date);
+        const dayName = index === 0 ? 'Сегодня' : 
+                       index === 1 ? 'Завтра' : 
+                       date.toLocaleDateString('ru-RU', { weekday: 'short' });
+        
+        daysHtml += `
+            <div class="day-card">
+                <div class="day-name">${dayName}</div>
+                <div class="temp-high">${Math.round(day.day.maxtemp_c)}°</div>
+                <div class="temp-low">${Math.round(day.day.mintemp_c)}°</div>
+                <div class="condition-icon">${day.day.condition.text}</div>
+            </div>
+        `;
+    });
+    daysHtml += '</div>';
+    weatherForecastContainer.innerHTML = daysHtml;
+
+    highlightsContainer.innerHTML = `
+        <div class="highlight-item">
+            <div class="highlight-label">UV Index</div>
+            <div class="highlight-value">${current.uv}</div>
+        </div>
+        <div class="highlight-item">
+            <div class="highlight-label">Wind</div>
+            <div class="highlight-value">${Math.round(current.wind_kph)} <span class="highlight-unit">km/h</span></div>
+            <div>${current.wind_dir}</div>
+        </div>
+        <div class="highlight-item">
+            <div class="highlight-label">Sunrise & Sunset</div>
+            <div class="highlight-value">${forecast[0].astro.sunrise}</div>
+            <div class="sub">↓ ${forecast[0].astro.sunset}</div>
+            <div class="sub">+2m22s</div>
+        </div>
+        <div class="highlight-item">
+            <div class="highlight-label">Clouds</div>
+            <div class="highlight-value">${current.cloud}%</div>
+            <div class="sub">🌧️ ${forecast[0].day.daily_chance_of_rain}%</div>
+        </div>
+        <div class="highlight-item">
+            <div class="highlight-label">Humidity</div>
+            <div class="highlight-value">${current.humidity}%</div>
+        </div>
+        <div class="highlight-item">
+            <div class="highlight-label"> Visibility</div>
+            <div class="highlight-value">${current.vis_km} km</div>
+        </div>
+        <div class="highlight-item">
+            <div class="highlight-label">Air Quality</div>
+            <div class="air-quality-row">
+                <span class="highlight-value">${current.air_quality?.['us-epa-index'] || 2}</span>
+                <span class="badge">${getAirQualityText(current.air_quality?.['us-epa-index'] || 2)}</span>
+            </div>
+        </div>
+    `;
+}
+
+function getAirQualityText(index) {
+    const levels = ['Хорошее', 'Среднее', 'Плохое', 'Опасное', 'Очень опасное'];
+    return levels[index-1] || 'Среднее';
+}
 // Инициализация
 requestGeolocation();
 
