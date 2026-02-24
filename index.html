@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.5, user-scalable=yes">
+    <title>KRLKVA.Weather</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- шапка с кнопками -->
+        <div class="header-row">
+            <h1>KRLKVA.Weather</h1>
+            <div class="button-group">
+                <button class="btn-update" id="refreshBtn">⟳ обновить</button>
+                <button class="btn-add-city" id="addCityBtn">+ город</button>
+            </div>
+        </div>
+
+        <!-- контейнер для сообщений: загрузка, ошибка -->
+        <div id="globalMessage" class="message-panel"></div>
+
+        <!-- основная карточка текущего города (по умолчанию местоположение или выбранный) -->
+        <div class="card" id="mainWeatherCard">
+            <div class="city-badge" id="currentCityDisplay">Определение...</div>
+            
+            <!-- индикатор загрузки -->
+            <div id="loadingIndicator" class="loading-spinner" style="display: none;">Загрузка данных...</div>
+            
+            <!-- блок с прогнозом (заполняется динамически) -->
+            <div id="weatherForecastContainer"></div>
+            
+            <!-- today's highlights по аналогии с референсом -->
+            <div id="highlightsContainer" class="highlights-grid"></div>
+        </div>
+
+        <!-- список дополнительных городов (чипсы) -->
+        <div class="card cities-card" id="citiesCard">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <span style="font-weight: 500;">📍 мои города</span>
+                <span class="city-count-hint" id="cityCount"></span>
+            </div>
+            <div class="city-list" id="cityChipsContainer"></div>
+            <div id="cityHelpText" style="font-size:0.85rem; color:#4f658a; margin-top: 10px;"></div>
+        </div>
+
+
+    <script src="script.js"></script>
+</body>
+</html>
