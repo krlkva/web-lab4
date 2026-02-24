@@ -29,12 +29,11 @@
             
             <!-- блок с прогнозом (заполняется динамически) -->
             <div id="weatherForecastContainer"></div>
-            
-            <!-- today's highlights по аналогии с референсом -->
+
             <div id="highlightsContainer" class="highlights-grid"></div>
         </div>
 
-        <!-- список дополнительных городов (чипсы) -->
+        <!-- список дополнительных городов -->
         <div class="card cities-card" id="citiesCard">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                 <span style="font-weight: 500;">📍 мои города</span>
@@ -44,6 +43,22 @@
             <div id="cityHelpText" style="font-size:0.85rem; color:#4f658a; margin-top: 10px;"></div>
         </div>
 
+        <!-- модальное окно -->
+        <div id="overlay" class="overlay hidden">
+            <div class="modal-card">
+                <h3 id="modalTitle">✎ добавить город</h3>
+                <div class="input-group">
+                    <input type="text" id="cityInput" placeholder="например, Москва" autocomplete="off">
+                    <div id="suggestionsBox" class="suggestions"></div>
+                    <div id="inputError" class="error-message"></div>
+                </div>
+                <div class="modal-actions">
+                    <button id="modalCancel">отмена</button>
+                    <button id="modalConfirm">добавить</button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <script src="script.js"></script>
 </body>
