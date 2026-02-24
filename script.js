@@ -32,6 +32,30 @@ function showMessage(msg) {
     }, 3000);
 }
 
+const STORAGE_KEY = 'weather_app_data';
+function saveToStorage() {
+    const data = {
+        mainCity: mainCity,
+        mainCoords: mainCoords,
+        additionalCities: additionalCities,
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+}
+
+function loadFromStorage() {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return false;
+    try {
+        const data = JSON.parse(raw);
+        if (data.mainCity) mainCity = data.mainCity;
+        if (data.mainCoords) mainCoords = data.mainCoords;
+        if (Array.isArray(data.additionalCities)) additionalCities = data.additionalCities;
+        return true;
+    } catch (e) { 
+        return false; 
+    }
+}
+
 // Модальное окно
 function showAddCityModal(isMainCity = false) {
     overlay.classList.remove('hidden');
