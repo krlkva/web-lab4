@@ -1,4 +1,4 @@
-const API_KEY = '2b1010f3c55a48be81c103758262402'; // Публичный тестовый ключ
+const API_KEY = '2b1010f3c55a48be81c103758262402'; 
 const BASE_URL = 'https://api.weatherapi.com/v1/forecast.json';
 
 const CITY_SUGGESTIONS = [
@@ -9,29 +9,51 @@ const CITY_SUGGESTIONS = [
     "Владивосток", "Сочи", "Калининград", "Ярославль", "Рязань"
 ];
 
+// Состояние приложения
 let mainCity = 'Текущее местоположение';
 let mainCoords = null;
+let additionalCities = [];
+let forecastsCache = new Map();
 
-// DOM элементы
+// ---------- DOM элементы ----------
+const refreshBtn = document.getElementById('refreshBtn');
+const addCityBtn = document.getElementById('addCityBtn');
+const currentCityDisplay = document.getElementById('currentCityDisplay');
+const weatherForecastContainer = document.getElementById('weatherForecastContainer');
+const highlightsContainer = document.getElementById('highlightsContainer');
+const loadingIndicator = document.getElementById('loadingIndicator');
+const globalMessage = document.getElementById('globalMessage');
+const cityChipsContainer = document.getElementById('cityChipsContainer');
 const overlay = document.getElementById('overlay');
+const modalTitle = document.getElementById('modalTitle');
 const cityInput = document.getElementById('cityInput');
 const suggestionsBox = document.getElementById('suggestionsBox');
 const inputError = document.getElementById('inputError');
 const modalCancel = document.getElementById('modalCancel');
 const modalConfirm = document.getElementById('modalConfirm');
-const addCityBtn = document.getElementById('addCityBtn');
-const currentCityDisplay = document.getElementById('currentCityDisplay');
-const globalMessage = document.getElementById('globalMessage');
+const cityCount = document.getElementById('cityCount');
 
-function showMessage(msg) {
+let activeModalResolve = null;
+
+function showMessage(msg, isError = false) {
     globalMessage.textContent = msg;
+    globalMessage.style.color = isError ? '#b02d26' : '#1e3b5c';
+    globalMessage.style.backgroundColor = isError ? '#ffeae8' : '#e3f0ff';
     globalMessage.style.padding = '12px 18px';
-    setTimeout(() => {
-        globalMessage.textContent = '';
-        globalMessage.style.padding = '8px 16px';
-    }, 3000);
+    globalMessage.style.borderRadius = '40px';
+    if (msg) setTimeout(() => { 
+        if (globalMessage.textContent === msg) {
+            globalMessage.textContent = ''; 
+            globalMessage.style.padding = '8px 16px';
+        }
+    }, 5000);
 }
 
+function setLoading(loading) {
+    loadingIndicator.style.display = loading ? 'flex' : 'none';
+}
+
+// работа с localStorage
 const STORAGE_KEY = 'weather_app_data';
 function saveToStorage() {
     const data = {
@@ -56,100 +78,89 @@ function loadFromStorage() {
     }
 }
 
-// Модальное окно
-function showAddCityModal(isMainCity = false) {
-    overlay.classList.remove('hidden');
-    cityInput.value = '';
-    inputError.textContent = '';
-    document.getElementById('modalTitle').textContent = 
-        isMainCity ? '✎ Добавить основной город' : '✎ Добавить город';
+// запрос к WeatherAPI
+async function fetchWeatherForCity(cityNameOrCoords) {
+    let query;
     
-    const handler = function() {
-        const val = this.value.trim().toLowerCase();
-        if (!val) {
-            suggestionsBox.style.display = 'none';
-            return;
-        }
-        
-        const filtered = CITY_SUGGESTIONS
-            .filter(c => c.toLowerCase().includes(val))
-            .slice(0, 6);
-        
-        if (filtered.length) {
-            suggestionsBox.style.display = 'block';
-            suggestionsBox.innerHTML = filtered.map(c => 
-                `<div data-suggest="${c}">${c}</div>`
-            ).join('');
-            
-            document.querySelectorAll('[data-suggest]').forEach(el => {
-                el.addEventListener('click', function() {
-                    cityInput.value = this.dataset.suggest;
-                    suggestionsBox.style.display = 'none';
-                    inputError.textContent = '';
-                });
-            });
-        } else {
-            suggestionsBox.style.display = 'none';
-        }
-    };
-    
-    cityInput.addEventListener('input', handler);
-    
-    modalConfirm.onclick = () => {
-        const selected = cityInput.value.trim();
-        if (!selected) {
-            inputError.textContent = 'Введите название города';
-            return;
-        }
-        
-        const normalized = CITY_SUGGESTIONS.find(
-            s => s.toLowerCase() === selected.toLowerCase()
-        );
-        
-        if (!normalized) {
-            inputError.textContent = 'Пожалуйста, выберите город из списка';
-            return;
-        }
-        
-        overlay.classList.add('hidden');
-        cityInput.removeEventListener('input', handler);
-        
-        if (isMainCity) {
-            mainCity = normalized;
-            mainCoords = null;
-            currentCityDisplay.textContent = mainCity;
-            showMessage(`Основной город: ${mainCity}`);
-        } else {
-            alert(`Добавлен город: ${normalized}`);
-        }
-    };
-}
-
-// Геолокация
-function requestGeolocation() {
-    if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-            (pos) => {
-                mainCoords = {
-                    lat: pos.coords.latitude,
-                    lon: pos.coords.longitude
-                };
-                mainCity = 'Текущее местоположение';
-                currentCityDisplay.textContent = mainCity;
-                showMessage('✅ Геолокация получена');
-                console.log('Координаты:', mainCoords);
-            },
-            (err) => {
-                console.log('Геолокация отклонена');
-                showMessage('Добавьте город вручную');
-                showAddCityModal(true);
-            }
-        );
+    if (typeof cityNameOrCoords === 'string') {
+        query = cityNameOrCoords;
+    } else if (cityNameOrCoords?.lat && cityNameOrCoords?.lon) {
+        query = `${cityNameOrCoords.lat},${cityNameOrCoords.lon}`;
     } else {
-        showAddCityModal(true);
+        throw new Error('Невалидный запрос');
+    }
+
+    const url = `${BASE_URL}?key=${API_KEY}&q=${encodeURIComponent(query)}&days=3&lang=ru&aqi=yes`;
+    
+    try {
+        const resp = await fetch(url);
+        if (!resp.ok) {
+            if (resp.status === 400) throw new Error('Город не найден');
+            throw new Error(`Ошибка API: ${resp.status}`);
+        }
+        const data = await resp.json();
+        return data;
+    } catch (error) {
+        console.error('Fetch error:', error);
+        throw error;
     }
 }
 
+// обновление всей погоды 
+async function refreshAllWeather() {
+    setLoading(true);
+    weatherForecastContainer.innerHTML = '<div style="text-align:center; padding:30px;">⏳ Загрузка прогноза...</div>';
+    highlightsContainer.innerHTML = '';
+    
+    try {
+        // Загрузка для основного города
+        if (mainCoords || (mainCity && mainCity !== 'Текущее местоположение')) {
+            try {
+                const query = mainCoords || mainCity;
+                const data = await fetchWeatherForCity(query);
+                
+                forecastsCache.set('main', data);
+                renderMainWeather(data);
+                
+                // Обновляем название города
+                if (data.location) {
+                    mainCity = data.location.name;
+                    currentCityDisplay.textContent = mainCity;
+                }
+                showMessage(`Данные обновлены`, false);
+            } catch (e) {
+                console.error('Ошибка основного города:', e);
+                showMessage(`Ошибка: ${e.message}`, true);
+                weatherForecastContainer.innerHTML = `<div style="text-align:center; padding:30px; color:#b02d26;"> Не удалось загрузить прогноз<br><small>${e.message}</small></div>`;
+                forecastsCache.delete('main');
+            }
+        } else {
+            weatherForecastContainer.innerHTML = '<div style="text-align:center; padding:30px;">Добавьте город для просмотра погоды</div>';
+        }
+
+        // Загрузка для дополнительных городов
+        for (const city of additionalCities) {
+            try {
+                const data = await fetchWeatherForCity(city);
+                forecastsCache.set(city, data);
+            } catch (e) {
+                console.warn(`Не удалось загрузить ${city}:`, e);
+                forecastsCache.delete(city);
+            }
+        }
+        
+        renderCityChips();
+        saveToStorage();
+        
+    } catch (error) {
+        console.error('Общая ошибка:', error);
+        showMessage('Ошибка при загрузке данных', true);
+    } finally {
+        setLoading(false);
+    }
+}
+
+//  отрисовка основной погоды
 function renderMainWeather(data) {
     if (!data || !data.forecast) return;
     
@@ -203,7 +214,7 @@ function renderMainWeather(data) {
             <div class="highlight-value">${current.humidity}%</div>
         </div>
         <div class="highlight-item">
-            <div class="highlight-label"> Visibility</div>
+            <div class="highlight-label">Visibility</div>
             <div class="highlight-value">${current.vis_km} km</div>
         </div>
         <div class="highlight-item">
@@ -221,13 +232,8 @@ function getAirQualityText(index) {
     return levels[index-1] || 'Среднее';
 }
 
-let additionalCities = [];
-
-// Добавить функцию отрисовки чипсов
+// Отрисовка дополнительных городов
 function renderCityChips() {
-    const container = document.getElementById('cityChipsContainer');
-    const cityCount = document.getElementById('cityCount');
-    
     let html = '';
     additionalCities.forEach(city => {
         const cached = forecastsCache.get(city);
@@ -242,127 +248,206 @@ function renderCityChips() {
         html += `
             <div class="city-chip" data-city="${city}">
                 <span>${city} ${temp}</span>
-                <small>${condition}</small>
+                <small style="opacity:0.7; margin-left:4px;">${condition}</small>
                 <span class="remove-btn" data-remove="${city}">✕</span>
             </div>
         `;
     });
     
     if (additionalCities.length === 0) {
-        html = '<div style="color:#7c8fa1;">Нет добавленных городов</div>';
+        html = '<div style="color:#7c8fa1; padding:8px 0;">Нет добавленных городов</div>';
     }
     
-    container.innerHTML = html;
+    cityChipsContainer.innerHTML = html;
     cityCount.textContent = additionalCities.length + ' / 5';
-    
-    // Обработчики удаления
+
+    // Обработчики на удаление
     document.querySelectorAll('.remove-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
             e.stopPropagation();
             const cityToRemove = btn.dataset.remove;
             additionalCities = additionalCities.filter(c => c !== cityToRemove);
             forecastsCache.delete(cityToRemove);
+            saveToStorage();
             renderCityChips();
+        });
+    });
+    
+    document.querySelectorAll('.city-chip').forEach(chip => {
+        chip.addEventListener('click', (e) => {
+            if (e.target.classList.contains('remove-btn')) return;
+            const city = chip.dataset.city;
+            const cityData = forecastsCache.get(city);
+            if (cityData) {
+                mainCity = city;
+                mainCoords = null;
+                renderMainWeather(cityData);
+                currentCityDisplay.textContent = city;
+                saveToStorage();
+            }
         });
     });
 }
 
-// Обновить modalConfirm
-modalConfirm.onclick = async () => {
-    const selected = cityInput.value.trim();
-    if (!selected) {
-        inputError.textContent = 'Введите название города';
-        return;
-    }
-    
-    const normalized = CITY_SUGGESTIONS.find(
-        s => s.toLowerCase() === selected.toLowerCase()
-    );
-    
-    if (!normalized) {
-        inputError.textContent = 'Пожалуйста, выберите город из списка';
-        return;
-    }
-    
-    const isMain = document.getElementById('modalTitle').textContent.includes('основной');
-    
-    if (!isMain && additionalCities.includes(normalized)) {
-        inputError.textContent = 'Этот город уже добавлен';
-        return;
-    }
-    
-    if (isMain && mainCity === normalized) {
-        inputError.textContent = 'Это уже основной город';
-        return;
-    }
-    
-    overlay.classList.add('hidden');
-    
-    if (isMain) {
-        mainCity = normalized;
-        mainCoords = null;
-        currentCityDisplay.textContent = mainCity;
-        await refreshMainWeather();
-    } else {
-        additionalCities.push(normalized);
-        try {
-            const data = await fetchWeatherForCity(normalized);
-            forecastsCache.set(normalized, data);
-        } catch (e) {
-            console.warn('Не удалось загрузить', normalized);
-        }
-        renderCityChips();
-    }
-};
+// добавления города 
+function showAddCityModal(existingValue = '', isMainCity = false) {
+    overlay.classList.remove('hidden');
+    cityInput.value = existingValue;
+    inputError.textContent = '';
+    suggestionsBox.innerHTML = '';
+    cityInput.focus();
 
-// Обновить refreshMainWeather для загрузки доп городов
-async function refreshAllWeather() {
-    await refreshMainWeather();
-    
-    for (const city of additionalCities) {
-        try {
-            const data = await fetchWeatherForCity(city);
-            forecastsCache.set(city, data);
-        } catch (e) {
-            console.warn(`Не удалось загрузить ${city}`);
-        }
-    }
-    renderCityChips();
-}
+    modalTitle.textContent = isMainCity ? 'Добавить основной город' : 'Добавить город';
 
-// Обновить requestGeolocation
-function requestGeolocation() {
-    if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-            async (pos) => {
-                mainCoords = {
-                    lat: pos.coords.latitude,
-                    lon: pos.coords.longitude
-                };
-                mainCity = 'Текущее местоположение';
-                currentCityDisplay.textContent = 'Определение...';
-                await refreshAllWeather();
-            },
-            (err) => {
-                showMessage('Добавьте город вручную');
-                showAddCityModal(true);
+    return new Promise((resolve) => {
+        activeModalResolve = resolve;
+
+        const handlerSuggest = () => {
+            const val = cityInput.value.trim().toLowerCase();
+            if (!val) { 
+                suggestionsBox.style.display = 'none'; 
+                return; 
             }
-        );
+            const filtered = CITY_SUGGESTIONS
+                .filter(c => c.toLowerCase().includes(val))
+                .slice(0, 6);
+            
+            if (filtered.length) {
+                suggestionsBox.style.display = 'block';
+                suggestionsBox.innerHTML = filtered.map(c => `<div data-suggest="${c}">${c}</div>`).join('');
+                
+                document.querySelectorAll('[data-suggest]').forEach(el => {
+                    el.addEventListener('click', () => {
+                        cityInput.value = el.dataset.suggest;
+                        suggestionsBox.style.display = 'none';
+                        inputError.textContent = '';
+                    });
+                });
+            } else {
+                suggestionsBox.style.display = 'none';
+            }
+        };
+
+        cityInput.addEventListener('input', handlerSuggest);
+        cityInput.addEventListener('blur', () => {
+            setTimeout(() => {
+                suggestionsBox.style.display = 'none';
+            }, 200);
+        });
+
+        const closeModal = (result) => {
+            overlay.classList.add('hidden');
+            cityInput.removeEventListener('input', handlerSuggest);
+            activeModalResolve = null;
+            resolve(result);
+        };
+
+        modalCancel.onclick = () => closeModal(null);
+        
+        modalConfirm.onclick = () => {
+            const selected = cityInput.value.trim();
+            if (!selected) {
+                inputError.textContent = 'Введите название города';
+                return;
+            }
+            
+            const normalized = CITY_SUGGESTIONS.find(s => s.toLowerCase() === selected.toLowerCase());
+            
+            if (!normalized) {
+                inputError.textContent = 'Пожалуйста, выберите город из списка';
+                return;
+            }
+
+            if (!isMainCity && additionalCities.includes(normalized)) {
+                inputError.textContent = 'Этот город уже добавлен';
+                return;
+            }
+
+            if (isMainCity && mainCity === normalized) {
+                inputError.textContent = 'Это уже основной город';
+                return;
+            }
+
+            closeModal(normalized);
+        };
+    });
+}
+
+async function initApp() {
+    const fromStorage = loadFromStorage();
+    
+    if (fromStorage && (mainCoords || (mainCity && mainCity !== 'Текущее местоположение'))) {
+        // Есть сохранённые данные
+        currentCityDisplay.textContent = mainCity;
+        await refreshAllWeather();
     } else {
-        showAddCityModal(true);
+        // Запрос геолокации
+        if (navigator.geolocation) {
+            setLoading(true);
+            navigator.geolocation.getCurrentPosition(
+                async (pos) => {
+                    mainCoords = { 
+                        lat: pos.coords.latitude, 
+                        lon: pos.coords.longitude 
+                    };
+                    mainCity = 'Текущее местоположение';
+                    currentCityDisplay.textContent = 'Определение...';
+                    saveToStorage();
+                    await refreshAllWeather();
+                },
+                async (err) => {
+                    console.log('Геолокация отклонена');
+                    showMessage('Добавьте город вручную', false);
+                    setLoading(false);
+                    await handleNoGeo();
+                }
+            );
+        } else {
+            await handleNoGeo();
+        }
     }
 }
 
-// Обновить кнопку обновления
-document.getElementById('refreshBtn').addEventListener('click', refreshAllWeather);
+async function handleNoGeo() {
+    const city = await showAddCityModal('', true);
+    if (city) {
+        mainCity = city;
+        mainCoords = null;
+        currentCityDisplay.textContent = city;
+        saveToStorage();
+        await refreshAllWeather();
+    } else {
+        weatherForecastContainer.innerHTML = '<div style="text-align:center; padding:30px;">🏙️ Добавьте город для просмотра погоды</div>';
+    }
+}
 
-// Инициализация
-requestGeolocation();
+//  события 
+refreshBtn.addEventListener('click', () => {
+    refreshAllWeather();
+});
 
-// Обработчики кнопок
-addCityBtn.addEventListener('click', () => showAddCityModal(false));
-modalCancel.addEventListener('click', () => overlay.classList.add('hidden'));
+addCityBtn.addEventListener('click', async () => {
+    if (additionalCities.length >= 5) {
+        alert('Максимум 5 дополнительных городов');
+        return;
+    }
+    const newCity = await showAddCityModal('', false);
+    if (newCity) {
+        additionalCities.push(newCity);
+        saveToStorage();
+        await refreshAllWeather();
+    }
+});
+
 
 overlay.addEventListener('click', (e) => {
-    if (e.target === overlay) overlay.classList.add('hidden');
+    if (e.target === overlay) {
+        overlay.classList.add('hidden');
+        if (activeModalResolve) activeModalResolve(null);
+    }
+});
+
+// Старт приложения
+document.addEventListener('DOMContentLoaded', () => {
+    initApp();
 });
