@@ -8,7 +8,6 @@
 </head>
 <body>
     <div class="app-container">
-        <!-- шапка с кнопками -->
         <div class="header-row">
             <h1>KRLKVA.Weather</h1>
             <div class="button-group">
@@ -20,16 +19,15 @@
         <!-- контейнер для сообщений: загрузка, ошибка -->
         <div id="globalMessage" class="message-panel"></div>
 
-        <!-- основная карточка текущего города (по умолчанию местоположение или выбранный) -->
+        <!-- основная карточка текущего города  -->
         <div class="card" id="mainWeatherCard">
             <div class="city-badge" id="currentCityDisplay">Определение...</div>
-            
-            <!-- индикатор загрузки -->
+           
             <div id="loadingIndicator" class="loading-spinner" style="display: none;">Загрузка данных...</div>
             
-            <!-- блок с прогнозом (заполняется динамически) -->
+            <!-- блок с прогнозом  -->
             <div id="weatherForecastContainer"></div>
-
+          
             <div id="highlightsContainer" class="highlights-grid"></div>
         </div>
 
@@ -43,7 +41,7 @@
             <div id="cityHelpText" style="font-size:0.85rem; color:#4f658a; margin-top: 10px;"></div>
         </div>
 
-        <!-- модальное окно -->
+        <!-- модальное окно для добавления города / отказа гео -->
         <div id="overlay" class="overlay hidden">
             <div class="modal-card">
                 <h3 id="modalTitle">✎ добавить город</h3>
